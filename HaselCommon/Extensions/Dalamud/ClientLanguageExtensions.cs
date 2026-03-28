@@ -11,6 +11,7 @@ public static class ClientLanguageExtensions
                 ClientLanguage.German => "de",
                 ClientLanguage.French => "fr",
                 ClientLanguage.Japanese => "ja",
+                // ClientLanguage.ChineseSimplified => "zh-hans",
                 _ => "en"
             };
         }
@@ -25,6 +26,7 @@ public static class ClientLanguageExtensions
                 "de" => ClientLanguage.German,
                 "fr" => ClientLanguage.French,
                 "ja" => ClientLanguage.Japanese,
+                // "zh-hans" => ClientLanguage.ChineseSimplified,
                 _ => ClientLanguage.English
             };
         }

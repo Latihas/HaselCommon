@@ -48,7 +48,12 @@ public partial class TextService
     public bool TryGetTranslation(string key, [MaybeNullWhen(false)] out string text)
     {
         text = default;
-        return _translations.TryGetValue(key, out var entry) && (entry.TryGetValue(_languageProvider.LanguageCode, out text) || entry.TryGetValue("en", out text));
+        return _translations.TryGetValue(key, out var entry) && (entry.TryGetValue(_languageProvider.LanguageCode switch
+        {
+            "tw" => "zh-hant",
+            "zh" => "zh-hans",
+            _ => _languageProvider.LanguageCode,
+        }, out text) || entry.TryGetValue("en", out text));
     }
 
     public string Translate(string key)
