@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Component.Exd;
 using GearsetEntry = FFXIVClientStructs.FFXIV.Client.UI.Misc.RaptureGearsetModule.GearsetEntry;
 using TerritoryType = Lumina.Excel.Sheets.TerritoryType;
 
-namespace HaselCommon.Utils;
+namespace HaselCommon.Gui;
 
 public static class ImGuiContextMenu
 {
@@ -309,15 +309,15 @@ public unsafe struct ImGuiContextMenuBuilder(TextService textService, MapService
             {
                 using var tooltip = ImRaii.Tooltip();
 
-                var pos = ImGui.GetCursorPos();
                 ImGui.GetWindowDrawList().AddText(
-                    UiBuilder.IconFont, 12 * ImGuiHelpers.GlobalScale,
-                    ImGui.GetWindowPos() + pos + new Vector2(2),
-                    Color.Grey.ToUInt(),
-                    FontAwesomeIcon.ExternalLinkAlt.ToIconString()
-                );
-                ImGui.SetCursorPos(pos + new Vector2(20, 0) * ImGuiHelpers.GlobalScale);
-                ImGui.TextColored(Color.Grey, $"https://www.garlandtools.org/db/#{type}/{id}");
+                    UiBuilder.IconFont, 12 * ImStyle.Scale,
+                    ImCursor.ScreenPosition + new Vector2(2 * ImStyle.Scale),
+                    Color.Text700.ToUInt(),
+                    FontAwesomeIcon.ExternalLinkAlt.ToIconString());
+
+                ImCursor.X += 20 * ImStyle.Scale;
+
+                ImGui.TextColored(Color.Text700, $"https://www.garlandtools.org/db/#{type}/{id}");
             }
         });
 

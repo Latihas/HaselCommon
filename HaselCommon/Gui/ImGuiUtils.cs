@@ -8,37 +8,33 @@ public static class ImGuiUtils
 {
     public static void DrawPaddedSeparator()
     {
-        var itemSpacingHeight = ImGui.GetStyle().ItemSpacing.Y;
+        var itemSpacingHeight = ImStyle.ItemSpacing.Y;
 
-        PushCursorY(itemSpacingHeight);
+        ImCursor.Y += itemSpacingHeight;
         ImGui.Separator();
-        PushCursorY(itemSpacingHeight - 1);
+        ImCursor.Y += itemSpacingHeight - 1;
     }
 
-    public static void DrawSection(string label, bool pushDown = true, bool respectUiTheme = false, RowRef<UIColor> uiColor = default)
+    public static void DrawSection(string label, bool pushDown = true, Color? color = null)
     {
-        var itemSpacingHeight = ImGui.GetStyle().ItemSpacing.Y;
+        var itemSpacingHeight = ImStyle.ItemSpacing.Y;
 
         // push down a bit
         if (pushDown)
-            PushCursorY(itemSpacingHeight * 2);
+            ImCursor.Y += itemSpacingHeight * 2;
 
-        var color = Color.Gold;
-        if (respectUiTheme && Misc.IsLightTheme && uiColor.IsValid)
-            color = Color.FromABGR(uiColor.Value.Dark);
-
-        ImGui.TextColored(color, label);
+        ImGui.TextColored(color ?? Color.Gold, label);
 
         // pull up the separator
-        PushCursorY(-itemSpacingHeight + 3);
+        ImCursor.Y += -itemSpacingHeight + 3;
         ImGui.Separator();
-        PushCursorY(itemSpacingHeight * 2 - 1);
+        ImCursor.Y += itemSpacingHeight * 2 - 1;
     }
 
-    public static ImRaii.Indent ConfigIndent(bool condition = true)
-        => ImRaii.PushIndent(ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.X / 2f, true, condition);
+    public static ImRaii.IndentDisposable ConfigIndent(bool condition = true)
+        => ImRaii.PushIndent(ImStyle.FrameHeight + ImStyle.ItemSpacing.X / 2f, true, condition);
 
-    public static unsafe void DrawLink(string label, string title, string url)
+    public static void DrawLink(string label, string title, string url)
     {
         ImGui.Text(label);
 
@@ -47,21 +43,19 @@ public static class ImGuiUtils
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
 
             using var tooltip = ImRaii.Tooltip();
-            if (tooltip.Success)
-            {
-                if (!string.IsNullOrEmpty(title))
-                    ImGui.TextColored(Color.White, title);
 
-                var pos = ImGui.GetCursorPos();
-                ImGui.GetWindowDrawList().AddText(
-                    UiBuilder.IconFont, 12,
-                    ImGui.GetWindowPos() + pos + new Vector2(2),
-                    Color.Grey.ToUInt(),
-                    FontAwesomeIcon.ExternalLinkAlt.ToIconString()
-                );
-                ImGui.SetCursorPos(pos + new Vector2(20, 0));
-                ImGui.TextColored(Color.Grey, url);
-            }
+            if (!string.IsNullOrEmpty(title))
+                ImGui.TextColored(Color.White, title);
+
+            ImGui.GetWindowDrawList().AddText(
+                UiBuilder.IconFont, 12 * ImStyle.Scale,
+                ImCursor.ScreenPosition + new Vector2(2 * ImStyle.Scale),
+                Color.Text700.ToUInt(),
+                FontAwesomeIcon.ExternalLinkAlt.ToIconString());
+
+            ImCursor.X += 20 * ImStyle.Scale;
+
+            ImGui.TextColored(Color.Text700, url);
         }
 
         if (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && ImGui.IsItemHovered())
@@ -72,35 +66,19 @@ public static class ImGuiUtils
     {
         ImGui.SameLine();
 
-        var height = ImGui.GetFrameHeight();
-        var pos = ImGui.GetWindowPos() + ImGui.GetCursorPos();
+        var height = ImStyle.FrameHeight;
+        var pos = ImCursor.ScreenPosition;
 
         ImGui.GetWindowDrawList().AddLine(
             pos + new Vector2(3f, 0f),
             pos + new Vector2(3f, height),
-            color
-        );
+            color);
 
         ImGui.Dummy(new(7, height));
     }
 
     public static void VerticalSeparator()
         => VerticalSeparator(ImGui.GetColorU32(ImGuiCol.Separator));
-
-    public static void SameLineSpace()
-        => ImGui.SameLine(0, ImGui.CalcTextSize(" ").X);
-
-    public static void PushCursor(Vector2 vec)
-        => ImGui.SetCursorPos(ImGui.GetCursorPos() + vec);
-
-    public static void PushCursor(float x, float y)
-        => PushCursor(new Vector2(x, y));
-
-    public static void PushCursorX(float x)
-        => ImGui.SetCursorPosX(ImGui.GetCursorPosX() + x);
-
-    public static void PushCursorY(float y)
-        => ImGui.SetCursorPosY(ImGui.GetCursorPosY() + y);
 
     public static Vector2 GetIconSize(FontAwesomeIcon icon)
     {
@@ -118,7 +96,7 @@ public static class ImGuiUtils
     public static Vector2 GetIconButtonSize(FontAwesomeIcon icon)
     {
         using var iconFont = ImRaii.PushFont(UiBuilder.IconFont);
-        return ImGui.CalcTextSize(icon.ToIconString()) + ImGui.GetStyle().FramePadding * 2;
+        return ImGui.CalcTextSize(icon.ToIconString()) + ImStyle.FramePadding * 2;
     }
 
     public static bool IconButton(string key, FontAwesomeIcon icon, string? tooltip = null, Vector2 size = default, bool disabled = false, bool active = false)
@@ -126,23 +104,22 @@ public static class ImGuiUtils
         using var iconFont = ImRaii.PushFont(UiBuilder.IconFont);
         if (!key.StartsWith("##")) key = "##" + key;
 
-        var disposables = new List<IDisposable>();
+        using var color = new ImRaii.ColorDisposable();
 
         if (disabled)
         {
-            disposables.Add(ImRaii.PushColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]));
-            disposables.Add(ImRaii.PushColor(ImGuiCol.ButtonActive, ImGui.GetStyle().Colors[(int)ImGuiCol.Button]));
-            disposables.Add(ImRaii.PushColor(ImGuiCol.ButtonHovered, ImGui.GetStyle().Colors[(int)ImGuiCol.Button]));
+            color.Push(ImGuiCol.Text, ImGuiCol.TextDisabled)
+                 .Push(ImGuiCol.ButtonActive, ImGuiCol.Button)
+                 .Push(ImGuiCol.ButtonHovered, ImGuiCol.Button);
         }
         else if (active)
         {
-            disposables.Add(ImRaii.PushColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.ButtonActive]));
+            color.Push(ImGuiCol.Button, ImGuiCol.ButtonActive);
         }
 
         var pressed = ImGui.Button(icon.ToIconString() + key, size);
 
-        foreach (var disposable in disposables)
-            disposable.Dispose();
+        color.Dispose();
 
         iconFont?.Dispose();
 
