@@ -13,6 +13,7 @@ public unsafe partial class AddonObserver : IDisposable
     private readonly Dictionary<Pointer<AtkUnitBase>, string> _nameCache = new(256);
 
     public delegate void CallbackDelegate(string addonName);
+
     public event CallbackDelegate? AddonOpen;
     public event CallbackDelegate? AddonClose;
 
@@ -36,8 +37,14 @@ public unsafe partial class AddonObserver : IDisposable
 
         foreach (var atkUnitBase in RaptureAtkUnitManager.Instance()->AllLoadedUnitsList.Entries)
         {
-            if (atkUnitBase.Value != null && atkUnitBase.Value->IsReady && atkUnitBase.Value->IsVisible)
-                _visibleUnits.Add(atkUnitBase);
+            try
+            {
+                if (atkUnitBase.Value != null && atkUnitBase.Value->IsReady && atkUnitBase.Value->IsVisible)
+                    _visibleUnits.Add(atkUnitBase);
+            }
+            catch
+            {
+            }
         }
 
         _removedUnits.Clear();
