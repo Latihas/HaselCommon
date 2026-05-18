@@ -1,10 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Text.Evaluator;
-using Dalamud.Utility;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using DObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
+using static Dalamud.Utility.StringExtensions;
+using RentedSeStringBuilder = Dalamud.Utility.RentedSeStringBuilder;
 
 namespace HaselCommon.Services;
 
@@ -54,6 +54,12 @@ public partial class TextService
             "zh" => "zh-hans",
             _ => _languageProvider.LanguageCode,
         }, out text) || entry.TryGetValue("en", out text));
+    }
+
+    public bool TryGetTranslation(string key, ClientLanguage language, [MaybeNullWhen(false)] out string text)
+    {
+        text = default;
+        return _translations.TryGetValue(key, out var entry) && (entry.TryGetValue(language.ToCode(), out text) || entry.TryGetValue("en", out text));
     }
 
     public string Translate(string key)
@@ -112,6 +118,21 @@ public partial class TextService
         }
 
         return _seStringEvaluator.Evaluate(macroString, localParameters, _languageProvider.ClientLanguage);
+    }
+
+    public ReadOnlySeString EvaluateTranslatedSeString(string key, ClientLanguage language, params Span<SeStringParameter> localParameters)
+    {
+        var cacheKey = (key, language);
+
+        if (!_macroStringCache.TryGetValue(cacheKey, out var macroString))
+        {
+            if (!TryGetTranslation(key, language, out var text))
+                return ReadOnlySeString.FromText(key);
+
+            _macroStringCache.TryAdd(cacheKey, macroString = ReadOnlySeString.FromMacroString(text));
+        }
+
+        return _seStringEvaluator.Evaluate(macroString, localParameters, language);
     }
 
     public string GetAddonText(uint id, ClientLanguage? language = null)
@@ -211,9 +232,6 @@ public partial class TextService
     public string GetOrnamentName(uint id, ClientLanguage? language = null)
         => GetOrCreateCachedText<Ornament>(id, language, (row) => row.Singular);
 
-    public string GetMountName(uint id, ClientLanguage? language = null)
-        => GetOrCreateCachedText<Mount>(id, language, (row) => row.Singular);
-
     public string GetPlaceName(uint id, ClientLanguage? language = null)
         => GetOrCreateCachedText<PlaceName>(id, language, (row) => row.Name);
 
@@ -221,25 +239,25 @@ public partial class TextService
         => GetOrCreateCachedText<Fate>(id, language, (row) => _seStringEvaluator.Evaluate(row.Name, default, language));
 
     public string GetBNpcName(uint id, ClientLanguage? language = null)
-        => FromObjStr(ObjectKind.BattleNpc, id, language);
+        => _seStringEvaluator.EvaluateObjStr(ObjectKind.BattleNpc, id, language);
 
     public string GetENpcResidentName(uint id, ClientLanguage? language = null)
-        => FromObjStr(ObjectKind.EventNpc, id, language);
+        => _seStringEvaluator.EvaluateObjStr(ObjectKind.EventNpc, id, language);
 
     public string GetTreasureName(uint id, ClientLanguage? language = null)
-        => FromObjStr(ObjectKind.Treasure, id, language);
+        => _seStringEvaluator.EvaluateObjStr(ObjectKind.Treasure, id, language);
 
     public string GetGatheringPointName(uint id, ClientLanguage? language = null)
-        => FromObjStr(ObjectKind.GatheringPoint, id, language);
+        => _seStringEvaluator.EvaluateObjStr(ObjectKind.GatheringPoint, id, language);
 
     public string GetEObjName(uint id, ClientLanguage? language = null)
-        => FromObjStr(ObjectKind.EventObj, id, language);
+        => _seStringEvaluator.EvaluateObjStr(ObjectKind.EventObj, id, language);
 
     public string GetCompanionName(uint id, ClientLanguage? language = null)
-        => FromObjStr(ObjectKind.Companion, id, language);
+        => _seStringEvaluator.EvaluateObjStr(ObjectKind.Companion, id, language);
 
-    private string FromObjStr(ObjectKind objectKind, uint id, ClientLanguage? language = null)
-        => _seStringEvaluator.EvaluateFromAddon(2025, [((DObjectKind)objectKind).GetObjStrId(id)], language).ToString();
+    public string GetMountName(uint id, ClientLanguage? language = null)
+        => _seStringEvaluator.EvaluateActStr(ActionKind.Mount, id, language);
 
     private string GetOrCreateCachedText<T>(uint rowId, ClientLanguage? language, Func<T, ReadOnlySeString> getText) where T : struct, IExcelRow<T>
     {
