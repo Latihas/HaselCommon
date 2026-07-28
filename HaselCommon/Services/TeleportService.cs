@@ -17,7 +17,7 @@ public unsafe partial class TeleportService : IDisposable
     [AutoPostConstruct]
     private void Initialize()
     {
-        _updateAetherytesDebouncer = _framework.CreateDebouncer(TimeSpan.FromMilliseconds(200), UpdateAetherytes);
+        _updateAetherytesDebouncer = _framework.CreateHaselDebouncer(TimeSpan.FromMilliseconds(200), UpdateAetherytes);
 
         _unlockState.Unlock += OnUnlock;
 
@@ -68,13 +68,7 @@ public unsafe partial class TeleportService : IDisposable
             return false;
         }
 
-        if (level.Territory.Value.Aetheryte.RowId != 0 && level.Territory.Value.Aetheryte.IsValid)
-        {
-            aetheryte = level.Territory.Value.Aetheryte.Value;
-            return true;
-        }
-
-        var levelCoords = new Vector2(level.X, level.Z);
+        var levelCoords = MapService.GetCoords(level);
         var aetherytes = _excelService.FindRows<Aetheryte>(row => row.Map.RowId == level.Map.RowId && row.Territory.RowId == level.Territory.RowId);
 
         aetheryte = default;
@@ -84,13 +78,20 @@ public unsafe partial class TeleportService : IDisposable
         {
             if (_excelService.TryFindSubrow<MapMarker>(row => row.DataType == (byte)MapMarkerDataType.Aetheryte && row.DataKey.RowId == aetheryteRow.RowId, out var mapMarker))
             {
-                var distance = (MapService.GetCoords(aetheryteRow.Map.Value, mapMarker) - levelCoords).LengthSquared();
+                var coords = MapService.GetCoords(aetheryteRow.Map.Value, mapMarker);
+                var distance = (coords - levelCoords).LengthSquared();
                 if (distance < currentDistance)
                 {
                     currentDistance = distance;
                     aetheryte = aetheryteRow;
                 }
             }
+        }
+
+        if (currentDistance == float.MaxValue && level.Territory.Value.Aetheryte.RowId != 0 && level.Territory.Value.Aetheryte.IsValid)
+        {
+            aetheryte = level.Territory.Value.Aetheryte.Value;
+            return true;
         }
 
         return currentDistance != float.MaxValue;

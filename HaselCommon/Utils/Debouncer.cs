@@ -9,14 +9,13 @@ namespace HaselCommon.Utils;
 /// </summary>
 public class Debouncer : IDisposable
 {
-    private readonly IFramework framework;
-    private readonly TimeSpan delay;
-    private readonly Action action;
-    private readonly Lock debouncerLock = new();
-    private CancellationTokenSource cts = new();
-    private DateTime targetTime = DateTime.MinValue;
-    private bool isPending;
-    private bool isDisposed;
+    private readonly IFramework _framework;
+    private readonly TimeSpan _delay;
+    private readonly Action _action;
+    private readonly Lock _debouncerLock = new();
+    private CancellationTokenSource? _cts;
+    private DateTime _targetTime = DateTime.MinValue;
+    private bool _isDisposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Debouncer"/> class.
@@ -29,22 +28,27 @@ public class Debouncer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        this.framework = framework;
-        this.delay = delay;
-        this.action = action;
+        _framework = framework;
+        _delay = delay;
+        _action = action;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the action is queued to be executed.
+    /// </summary>
+    public bool IsPending => _cts != null;
 
     /// <inheritdoc/>
     public void Dispose()
     {
-        using var scope = this.debouncerLock.EnterScope();
+        using var scope = _debouncerLock.EnterScope();
 
-        if (this.isDisposed)
+        if (_isDisposed)
             return;
 
-        this.isDisposed = true;
-        this.cts.Cancel();
-        this.cts.Dispose();
+        Cancel();
+
+        _isDisposed = true;
     }
 
     /// <summary>
@@ -52,42 +56,51 @@ public class Debouncer : IDisposable
     /// </summary>
     public void Debounce()
     {
-        using var scope = this.debouncerLock.EnterScope();
+        using var scope = _debouncerLock.EnterScope();
 
-        if (this.isDisposed)
+        if (_isDisposed)
             return;
 
-        this.targetTime = DateTime.UtcNow + this.delay;
+        _targetTime = DateTime.UtcNow + _delay;
 
-        if (this.isPending)
+        if (IsPending)
             return;
 
-        this.cts.Cancel();
-        this.cts.Dispose();
-        this.cts = new();
+        _cts = new();
+        _framework.RunOnTick(OnTick, _delay, cancellationToken: _cts.Token);
+    }
 
-        this.isPending = true;
-        this.framework.RunOnTick(this.OnTick, this.delay, cancellationToken: this.cts.Token);
+    /// <summary>
+    /// Cancels the pending execution of the action.
+    /// </summary>
+    public void Cancel()
+    {
+        using var scope = _debouncerLock.EnterScope();
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
     }
 
     private void OnTick()
     {
-        using (this.debouncerLock.EnterScope())
+        using (_debouncerLock.EnterScope())
         {
-            if (this.isDisposed)
+            if (_isDisposed)
                 return;
 
             var now = DateTime.UtcNow;
-            if (now < this.targetTime)
+            if (now < _targetTime && _cts != null)
             {
-                this.isPending = true;
-                this.framework.RunOnTick(this.OnTick, this.targetTime - now, cancellationToken: this.cts.Token);
+                _framework.RunOnTick(OnTick, _targetTime - now, cancellationToken: _cts.Token);
                 return;
             }
 
-            this.isPending = false;
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
         }
 
-        this.action();
+        _action();
     }
 }
